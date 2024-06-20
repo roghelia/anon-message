@@ -1,49 +1,69 @@
-import dbConnect from "@/lib/dbConnection";
-import User from "@/models/User";
-import { z } from "zod";
-import { usernameValidation } from "@/schemas/signUpSchema";
-import { queryObjects } from "v8";
-import { messagesSchema } from "@/schemas/messageSchema";
+import { z } from 'zod';
+import { usernameValidation } from '@/schemas/signUpSchema';
+import dbConnect from '@/lib/dbConnection';
+import User from '@/models/User';
 
 const UsernameQuerySchema = z.object({
-    username: usernameValidation
-})
+  username: usernameValidation,
+});
 
 export async function GET(request: Request) {
-    await dbConnect();
-    try {
-        const {searchParams} = new URL(request.url);
-        const queryParam = {
-            username: searchParams.get("username")
-        }
-        const result = UsernameQuerySchema.safeParse(queryParam);
-        if(!result.success) {
-            const usernameErrors = result.error.format().username?._errors || [];
-            return Response.json({
-                success: false, 
-                message: usernameErrors?.length > 0 ? usernameErrors.join(", ") : "invalid query parameters."
-            })
-        } else {
-            const {username} = result.data;
-            const user = await User.findOne({username});
-            if(user) {
-                return Response.json({
-                    success: false, 
-                    message: "Username is already taken."
-                }, {status: 400})
-            } else {
-                return Response.json({
-                    success: true,
-                    message: "username is available."
-                }, {status: 200})
-            }
-        }
+  await dbConnect();
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const queryParams = {
+      username: searchParams.get('username'),
+    };
+
+    const result = UsernameQuerySchema.safeParse(queryParams);
+
+    if (!result.success) {
+      const usernameErrors = result.error.format().username?._errors || [];
+      return Response.json(
+        {
+          success: false,
+          message:
+            usernameErrors?.length > 0
+              ? usernameErrors.join(', ')
+              : 'Invalid query parameters',
+        },
+        { status: 400 }
+      );
     }
-    catch (error) {
-        console.error(error);
-        return Response.json({
-            success: false, 
-            message: "error checking username"
-        }, {status: 500});
+
+    const { username } = result.data;
+
+    const existingVerifiedUser = await User.findOne({
+      username,
+      isVerified: true,
+    });
+
+    if (existingVerifiedUser) {
+      return Response.json(
+        {
+          success: false,
+          message: 'Username is already taken',
+        },
+        { status: 200 }
+      );
     }
+
+    return Response.json(
+      {
+        success: true,
+        message: 'Username is unique',
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('Error checking username:', error);
+    return Response.json(
+      {
+        success: false,
+        message: 'Error checking username',
+      },
+      { status: 500 }
+    );
+  }
 }
